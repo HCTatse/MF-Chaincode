@@ -198,6 +198,13 @@ public class MetaObject {
     }
 
     /**
+     * @param amount the amount to subtract
+     */
+    public void subtractAmount(double amount) {
+        this.amount -= amount;
+    }
+
+    /**
      * @return the unit definition
      */
     public String getUnit() {

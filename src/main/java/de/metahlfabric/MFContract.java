@@ -519,6 +519,35 @@ public class MFContract implements ContractInterface {
     }
 
     /**
+     * Reduces the amount of specified key
+     *
+     * @param ctx the hyperledger context object
+     * @param id  the id of the object
+     * @param amountDif the amount which will be subtracted
+     * @return the JSON string object
+     */
+    @Transaction()
+    public String changeAssetAmount(Context ctx, String id, String amountDif ) {
+        if (!helper.objectExists(ctx, id))
+            return helper.createReturnValue("400", "The object with the key " + id + " does not exist");
+
+
+        MetaObject metaObject = helper.getMetaObject(ctx, id);
+        if (!metaObject.getActualOwner().equals(ctx.getClientIdentity().getMSPID()))
+            return helper.createReturnValue("400", "You are not the owner of " + id);
+
+
+        metaObject.subtractAmount(Double.parseDouble(amountDif));
+
+        if (metaObject.getAmount() < 0.0) return helper.createReturnValue("400", "The amount is lower than zero");
+
+        helper.putState(ctx, id, metaObject);
+        return helper.createSuccessReturnValue(metaObject.toJSON());
+    }
+
+
+
+    /**
      * Query the local state database (Couch DB query indexes)
      *
      * @param ctx the Hyperledger context object
@@ -638,6 +667,47 @@ public class MFContract implements ContractInterface {
 
         return helper.createSuccessReturnValue(metaObject.toJSON());
     }
+
+    /**
+     * Rejects the asset
+     *
+     * @param ctx the hyperledger context object
+     * @param id  the id of the object
+     * @return the object
+     */
+    @Transaction()
+    public String rejectAsset(Context ctx, String id) {
+
+        if (!helper.objectExists(ctx, id))
+            return helper.createReturnValue("400", "The object with the key " + id + " does not exist");
+
+        MetaObject metaObject = helper.getMetaObject(ctx, id);
+        String newOwner = ctx.getClientIdentity().getMSPID();
+
+        if (!metaObject.getReceiver().equals(newOwner))
+            return helper.createReturnValue("400", "You (" + ctx.getClientIdentity().getMSPID() + ") are not the receiver");
+
+        metaObject.setReceiver("");
+
+        MetaDef metaDef = helper.getMetaDef(ctx);
+
+        List<MetaDef.AttributeDefinition> allowedAttr = metaDef.getAttributesByAssetNameAndVersion(metaObject.getProductName(),
+                metaObject.getProductVersion());
+
+        if (allowedAttr != null) {
+            for (MetaDef.AttributeDefinition attributeDefinition : allowedAttr) {
+                if (attributeDefinition.getName() == "status") {
+                    metaObject.addAttribute("status", attributeDefinition.getVersion(),
+                            "REJECTED", attributeDefinition.getDataType());
+                }
+            }
+        }
+
+        helper.putState(ctx, id, metaObject);
+
+        return helper.createSuccessReturnValue(metaObject.toJSON());
+    }
+
 
     /**
      * Adds a predecessor
